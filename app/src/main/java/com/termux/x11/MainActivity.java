@@ -99,12 +99,16 @@ public class MainActivity extends AppCompatActivity {
     private boolean imeVisible = false;
     private int imeBottomInsetPx = 0;
     private boolean mouseButtonsImeAdjusted = false;
-    private float mouseButtonsSavedX = 0f;
-    private float mouseButtonsSavedY = 0f;
+    private float mouseButtonsHomeX = 0f;
+    private float mouseButtonsHomeY = 0f;
+    private boolean mouseButtonsHomeSet = false;
     private boolean mouseButtonsLayoutSaved = false;
     private int mouseButtonsSavedSecondaryOrientation = LinearLayout.HORIZONTAL;
     private int mouseButtonsSavedLeftW = 0, mouseButtonsSavedLeftH = 0;
     private int mouseButtonsSavedRightW = 0, mouseButtonsSavedRightH = 0;
+    private int mouseButtonsSavedKbdW = 0, mouseButtonsSavedKbdH = 0;
+    private int mouseButtonsSavedPosVisibility = View.VISIBLE;
+    private boolean mouseButtonsSavedChildrenOrder = false;
 
     public static Prefs prefs = null;
 
@@ -306,6 +310,42 @@ public class MainActivity extends AppCompatActivity {
         updateReseedStretchState();
     }
 
+    private void recordMouseButtonsHomePosition() {
+        if (imeVisible)
+            return;
+
+        View v = findViewById(R.id.mouse_buttons);
+        if (v == null)
+            return;
+
+        mouseButtonsHomeX = v.getX();
+        mouseButtonsHomeY = v.getY();
+        mouseButtonsHomeSet = true;
+    }
+
+    private float getMouseButtonsMaxY(View mouseButtons) {
+        final ViewPager pager = getTerminalToolbarViewPager();
+        int maxYDecrement = (pager.getVisibility() == View.VISIBLE) ? pager.getHeight() : 0;
+
+        View root = findViewById(android.R.id.content);
+        if (root == null || frm == null || mouseButtons == null)
+            return 0f;
+
+        Rect visible = new Rect();
+        getWindow().getDecorView().getWindowVisibleDisplayFrame(visible);
+
+        int[] rootPos = new int[2];
+        root.getLocationInWindow(rootPos);
+
+        int[] frmPos = new int[2];
+        frm.getLocationInWindow(frmPos);
+        int frmBottomWindow = frmPos[1] + frm.getHeight();
+
+        int safeBottomWindow = Math.min(frmBottomWindow, visible.bottom);
+        float safeBottomInRoot = safeBottomWindow - rootPos[1];
+        return safeBottomInRoot - mouseButtons.getHeight() - maxYDecrement;
+    }
+
     private void updateReseedStretchState() {
         LorieView lorieView = getLorieView();
         if (lorieView == null)
@@ -322,23 +362,27 @@ public class MainActivity extends AppCompatActivity {
 
         if (imeVisible && !mouseButtonsImeAdjusted) {
             mouseButtonsImeAdjusted = true;
-            mouseButtonsSavedX = primaryLayer.getX();
-            mouseButtonsSavedY = primaryLayer.getY();
+            if (!mouseButtonsHomeSet)
+                recordMouseButtonsHomePosition();
+            float restoreX = mouseButtonsHomeSet ? mouseButtonsHomeX : primaryLayer.getX();
+            float restoreY = mouseButtonsHomeSet ? mouseButtonsHomeY : primaryLayer.getY();
+            mouseButtonsHomeX = restoreX;
+            mouseButtonsHomeY = restoreY;
+            mouseButtonsHomeSet = true;
             applyMouseButtonsImeLayout(true);
         } else if (!imeVisible && mouseButtonsImeAdjusted) {
             applyMouseButtonsImeLayout(false);
-            primaryLayer.setX(mouseButtonsSavedX);
-            primaryLayer.setY(mouseButtonsSavedY);
+            if (mouseButtonsHomeSet) {
+                primaryLayer.setX(mouseButtonsHomeX);
+                primaryLayer.setY(mouseButtonsHomeY);
+            }
             mouseButtonsImeAdjusted = false;
         }
 
         if (imeVisible) {
-            final ViewPager pager = getTerminalToolbarViewPager();
-            int maxYDecrement = (pager.getVisibility() == View.VISIBLE) ? pager.getHeight() : 0;
-            float maxX = frm.getX() + frm.getWidth() - primaryLayer.getWidth();
-            float maxY = frm.getY() + frm.getHeight() - primaryLayer.getHeight() - maxYDecrement - imeBottomInsetPx;
-            primaryLayer.setX(MathUtils.clamp(primaryLayer.getX(), frm.getX(), maxX));
-            primaryLayer.setY(MathUtils.clamp(primaryLayer.getY(), frm.getY(), maxY));
+            float y = Math.max(frm.getY(), getMouseButtonsMaxY(primaryLayer));
+            primaryLayer.setX(frm.getX());
+            primaryLayer.setY(y);
         } else {
             makeSureHelpersAreVisibleAndInScreenBounds();
         }
@@ -347,11 +391,13 @@ public class MainActivity extends AppCompatActivity {
     private void applyMouseButtonsImeLayout(boolean enabled) {
         LinearLayout primaryLayer = findViewById(R.id.mouse_buttons);
         LinearLayout secondaryLayer = findViewById(R.id.mouse_buttons_secondary_layer);
+        LinearLayout bottomRow = findViewById(R.id.mouse_buttons_bottom_row);
         Button left = findViewById(R.id.mouse_button_left_click);
         Button right = findViewById(R.id.mouse_button_right_click);
         ImageButton pos = findViewById(R.id.mouse_buttons_position);
+        ImageButton kbd = findViewById(R.id.mouse_buttons_keyboard);
 
-        if (primaryLayer == null || secondaryLayer == null || left == null || right == null)
+        if (primaryLayer == null || secondaryLayer == null || bottomRow == null || left == null || right == null)
             return;
 
         if (enabled) {
@@ -362,28 +408,50 @@ public class MainActivity extends AppCompatActivity {
                 mouseButtonsSavedLeftH = left.getLayoutParams().height;
                 mouseButtonsSavedRightW = right.getLayoutParams().width;
                 mouseButtonsSavedRightH = right.getLayoutParams().height;
+                if (kbd != null) {
+                    mouseButtonsSavedKbdW = kbd.getLayoutParams().width;
+                    mouseButtonsSavedKbdH = kbd.getLayoutParams().height;
+                }
+                if (pos != null)
+                    mouseButtonsSavedPosVisibility = pos.getVisibility();
+                mouseButtonsSavedChildrenOrder = primaryLayer.getChildCount() == 2
+                        && primaryLayer.getChildAt(0).getId() == R.id.mouse_buttons_secondary_layer
+                        && primaryLayer.getChildAt(1).getId() == R.id.mouse_buttons_bottom_row;
             }
 
             primaryLayer.setOrientation(LinearLayout.HORIZONTAL);
             secondaryLayer.setOrientation(LinearLayout.HORIZONTAL);
+            if (mouseButtonsSavedChildrenOrder) {
+                primaryLayer.removeView(bottomRow);
+                primaryLayer.addView(bottomRow, 0);
+            }
             setSize(left, 96, 48);
             setSize(right, 96, 48);
             if (pos != null) {
                 pos.setPressed(false);
-                pos.setEnabled(false);
-                pos.setAlpha(0.6f);
+                pos.setVisibility(View.GONE);
             }
+            if (kbd != null)
+                setSize(kbd, 48, 48);
         } else {
             primaryLayer.setOrientation(LinearLayout.VERTICAL);
             if (mouseButtonsLayoutSaved) {
                 secondaryLayer.setOrientation(mouseButtonsSavedSecondaryOrientation);
                 restoreSize(left, mouseButtonsSavedLeftW, mouseButtonsSavedLeftH);
                 restoreSize(right, mouseButtonsSavedRightW, mouseButtonsSavedRightH);
+                if (kbd != null)
+                    restoreSize(kbd, mouseButtonsSavedKbdW, mouseButtonsSavedKbdH);
                 mouseButtonsLayoutSaved = false;
             }
             if (pos != null) {
-                pos.setEnabled(true);
-                pos.setAlpha(1f);
+                pos.setVisibility(mouseButtonsSavedPosVisibility);
+            }
+            if (mouseButtonsSavedChildrenOrder) {
+                primaryLayer.removeView(secondaryLayer);
+                primaryLayer.removeView(bottomRow);
+                primaryLayer.addView(secondaryLayer, 0);
+                primaryLayer.addView(bottomRow, 1);
+                mouseButtonsSavedChildrenOrder = false;
             }
         }
     }
@@ -516,10 +584,9 @@ public class MainActivity extends AppCompatActivity {
         int maxYDecrement = (pager.getVisibility() == View.VISIBLE) ? pager.getHeight() : 0;
 
         mouseAuxButtons.setX(MathUtils.clamp(mouseAuxButtons.getX(), frm.getX(), frm.getX() + frm.getWidth() - mouseAuxButtons.getWidth()));
-        mouseAuxButtons.setY(MathUtils.clamp(
-                mouseAuxButtons.getY(),
-                frm.getY(),
-                frm.getY() + frm.getHeight() - mouseAuxButtons.getHeight() - maxYDecrement - (imeVisible ? imeBottomInsetPx : 0)));
+        mouseAuxButtons.setY(MathUtils.clamp(mouseAuxButtons.getY(), frm.getY(), Math.max(frm.getY(), getMouseButtonsMaxY(mouseAuxButtons))));
+        if (!imeVisible && !mouseButtonsImeAdjusted)
+            recordMouseButtonsHomePosition();
 
         stylusAuxButtons.setX(MathUtils.clamp(stylusAuxButtons.getX(), frm.getX(), frm.getX() + frm.getWidth() - stylusAuxButtons.getWidth()));
         stylusAuxButtons.setY(MathUtils.clamp(stylusAuxButtons.getY(), frm.getY(), frm.getY() + frm.getHeight() - stylusAuxButtons.getHeight() - maxYDecrement));
@@ -535,6 +602,8 @@ public class MainActivity extends AppCompatActivity {
         v.setVisibility((LorieView.connected() && show && "1".equals(prefs.touchMode.get())) ? View.VISIBLE : View.GONE);
         v.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
         makeSureHelpersAreVisibleAndInScreenBounds();
+        if (!imeVisible && show)
+            recordMouseButtonsHomePosition();
     }
 
     public void toggleMouseAuxButtons() {
@@ -579,11 +648,7 @@ public class MainActivity extends AppCompatActivity {
             }
             handler.postDelayed(() -> {
                 float maxX = frm.getX() + frm.getWidth() - primaryLayer.getWidth();
-                float maxY = frm.getY() + frm.getHeight() - primaryLayer.getHeight();
-                if (pager.getVisibility() == View.VISIBLE)
-                    maxY -= pager.getHeight();
-                if (imeVisible)
-                    maxY -= imeBottomInsetPx;
+                float maxY = Math.max(frm.getY(), getMouseButtonsMaxY(primaryLayer));
                 primaryLayer.setX(MathUtils.clamp(primaryLayer.getX(), frm.getX(), maxX));
                 primaryLayer.setY(MathUtils.clamp(primaryLayer.getY(), frm.getY(), maxY));
             }, 10);
@@ -591,7 +656,7 @@ public class MainActivity extends AppCompatActivity {
 
         kbd.setOnClickListener((v) -> toggleKeyboardVisibility(MainActivity.this));
 
-        Map.of(left, InputStub.BUTTON_LEFT, middle, InputStub.BUTTON_MIDDLE, right, InputStub.BUTTON_RIGHT)
+        Map.of(left, InputStub.BUTTON_LEFT, right, InputStub.BUTTON_RIGHT)
                 .forEach((v, b) -> v.setOnTouchListener((__, e) -> {
             switch(e.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -607,6 +672,59 @@ public class MainActivity extends AppCompatActivity {
             }
             return true;
         }));
+
+        middle.setOnTouchListener(new View.OnTouchListener() {
+            final int touchSlop = ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
+            final int scrollStepPx = (int) (24 * getResources().getDisplayMetrics().density);
+            float startX, startY, lastY, accumulatedDy;
+            boolean scrolling;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = e.getX();
+                        startY = e.getY();
+                        lastY = startY;
+                        accumulatedDy = 0;
+                        scrolling = false;
+                        v.setPressed(true);
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE: {
+                        float dx = e.getX() - startX;
+                        float dy = e.getY() - startY;
+                        if (!scrolling && Math.abs(dy) > touchSlop && Math.abs(dy) > Math.abs(dx)) {
+                            scrolling = true;
+                            v.setPressed(true);
+                        }
+
+                        if (scrolling) {
+                            float delta = e.getY() - lastY;
+                            lastY = e.getY();
+                            accumulatedDy += delta;
+
+                            while (Math.abs(accumulatedDy) >= scrollStepPx) {
+                                float direction = Math.signum(accumulatedDy);
+                                getLorieView().sendMouseWheelEvent(0, direction > 0 ? 100 : -100);
+                                accumulatedDy -= direction * scrollStepPx;
+                            }
+                        }
+                        return true;
+                    }
+
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        if (!scrolling && e.getActionMasked() == MotionEvent.ACTION_UP) {
+                            getLorieView().sendMouseEvent(0, 0, InputStub.BUTTON_MIDDLE, true, true);
+                            getLorieView().sendMouseEvent(0, 0, InputStub.BUTTON_MIDDLE, false, true);
+                        }
+                        return true;
+                }
+                return true;
+            }
+        });
 
         pos.setOnTouchListener(new View.OnTouchListener() {
             final int touchSlop = (int) Math.pow(ViewConfiguration.get(MainActivity.this).getScaledTouchSlop(), 2);
@@ -633,11 +751,7 @@ public class MainActivity extends AppCompatActivity {
                         int[] offset = new int[2];
                         primaryLayer.getLocationInWindow(offset);
                         float maxX = frm.getX() + frm.getWidth() - primaryLayer.getWidth();
-                        float maxY = frm.getY() + frm.getHeight() - primaryLayer.getHeight();
-                        if (pager.getVisibility() == View.VISIBLE)
-                            maxY -= pager.getHeight();
-                        if (imeVisible)
-                            maxY -= imeBottomInsetPx;
+                        float maxY = Math.max(frm.getY(), getMouseButtonsMaxY(primaryLayer));
 
                         primaryLayer.setX(MathUtils.clamp(offset[0] - startOffset[0] + e.getX(), frm.getX(), maxX));
                         primaryLayer.setY(MathUtils.clamp(offset[1] - startOffset[1] + e.getY(), frm.getY(), maxY));
@@ -654,6 +768,7 @@ public class MainActivity extends AppCompatActivity {
                             v.performClick();
                             return true;
                         }
+                        recordMouseButtonsHomePosition();
                         break;
                     }
                 }
