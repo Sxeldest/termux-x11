@@ -12,11 +12,11 @@ Termux:X11 is a fully fledged X server. It is built with Android NDK and optimiz
 This repo uses submodules. Use 
 
 ```
-git clone --recurse-submodules https://github.com/termux/termux-x11 
+git clone --recurse-submodules https://github.com/Scheldest/termux-x11 
 ```
 or
 ```
-git clone https://github.com/termux/termux-x11
+git clone https://github.com/Scheldest/termux-x11
 cd termux-x11
 git submodule update --init --recursive
 ```
