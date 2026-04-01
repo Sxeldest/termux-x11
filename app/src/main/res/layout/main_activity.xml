@@ -173,8 +173,54 @@
                 android:paddingBottom="0px"
                 android:text="R"
                 android:textSize="8sp"
-                tools:ignore="HardcodedText,PxUsage,SmallSp" />
+            tools:ignore="HardcodedText,PxUsage,SmallSp" />
         </LinearLayout>
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/custom_overlay_buttons_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false" />
+
+    <LinearLayout
+        android:id="@+id/custom_overlay_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="#AA000000"
+        android:orientation="horizontal"
+        android:padding="4dp">
+
+        <Button
+            android:id="@+id/custom_overlay_add_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:minWidth="40dp"
+            android:minHeight="40dp"
+            android:padding="0dp"
+            android:text="@string/custom_overlay_add"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/custom_overlay_edit_button"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minHeight="40dp"
+            android:text="@string/custom_overlay_edit" />
+
+        <Button
+            android:id="@+id/custom_overlay_remove_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:minWidth="40dp"
+            android:minHeight="40dp"
+            android:padding="0dp"
+            android:text="@string/custom_overlay_remove"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <androidx.viewpager.widget.ViewPager

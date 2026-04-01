@@ -107,6 +107,10 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="lorie_pref_notificationButton0Action">Notification first button</string>
     <string name="lorie_pref_notificationButton1Action">Notification second button</string>
     <string name="lorie_pref_mediaKeysAction">Media keys</string>
+    <string name="custom_overlay_add">+</string>
+    <string name="custom_overlay_edit">Edit</string>
+    <string name="custom_overlay_done">Done</string>
+    <string name="custom_overlay_remove">-</string>
 
     <string name="lorie_pref_summary_requiresExactOrCustom">Requires "display resolution mode" to be "exact" or "custom"</string>
     <string name="lorie_pref_summary_requiresIntercepting">Requires intercepting system shortcuts with Dex mode or with Accessibility service</string>

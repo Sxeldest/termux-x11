@@ -43,6 +43,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
@@ -68,11 +69,20 @@ import com.termux.x11.utils.SamsungDexUtils;
 import com.termux.x11.utils.TermuxX11ExtraKeys;
 import com.termux.x11.utils.X11ToolbarViewPager;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+
 @SuppressLint("ApplySharedPref")
 @SuppressWarnings({"deprecation", "unused"})
 public class MainActivity extends AppCompatActivity {
     public static final String ACTION_STOP = "com.termux.x11.ACTION_STOP";
     public static final String ACTION_CUSTOM = "com.termux.x11.ACTION_CUSTOM";
+    private static final String PREF_CUSTOM_OVERLAY_BUTTONS = "customOverlayButtons";
+    private static final int CUSTOM_OVERLAY_BUTTON_WIDTH_DP = 72;
+    private static final int CUSTOM_OVERLAY_BUTTON_HEIGHT_DP = 48;
 
     public static Handler handler = new Handler();
     FrameLayout frm;
@@ -92,6 +102,15 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean imeVisible = false;
     private int imeBottomInsetPx = 0;
+    private final ArrayList<OverlayButtonSpec> customOverlayButtons = new ArrayList<>();
+    private FrameLayout customOverlayButtonsContainer;
+    private LinearLayout customOverlayControls;
+    private Button customOverlayAddButton;
+    private Button customOverlayEditButton;
+    private Button customOverlayRemoveButton;
+    private boolean customOverlayEditMode = false;
+    private String selectedCustomOverlayButtonId = null;
+    private int customOverlayButtonCounter = 0;
 
     public static Prefs prefs = null;
 
@@ -239,6 +258,7 @@ public class MainActivity extends AppCompatActivity {
         toggleExtraKeys(false, false);
 
         initStylusAuxButtons();
+        initCustomOverlayButtons();
 
         if (SDK_INT >= VERSION_CODES.TIRAMISU
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PERMISSION_GRANTED
@@ -296,6 +316,270 @@ public class MainActivity extends AppCompatActivity {
             return;
 
         lorieView.setTranslationY(0f);
+    }
+
+    private void initCustomOverlayButtons() {
+        customOverlayButtonsContainer = findViewById(R.id.custom_overlay_buttons_container);
+        customOverlayControls = findViewById(R.id.custom_overlay_controls);
+        customOverlayAddButton = findViewById(R.id.custom_overlay_add_button);
+        customOverlayEditButton = findViewById(R.id.custom_overlay_edit_button);
+        customOverlayRemoveButton = findViewById(R.id.custom_overlay_remove_button);
+
+        customOverlayAddButton.setOnClickListener(v -> addCustomOverlayButton());
+        customOverlayEditButton.setOnClickListener(v -> {
+            customOverlayEditMode = !customOverlayEditMode;
+            if (!customOverlayEditMode)
+                selectedCustomOverlayButtonId = null;
+            renderCustomOverlayButtons();
+            updateCustomOverlayControlsState();
+        });
+        customOverlayRemoveButton.setOnClickListener(v -> removeSelectedCustomOverlayButton());
+
+        loadCustomOverlayButtons();
+        renderCustomOverlayButtons();
+        customOverlayButtonsContainer.post(this::ensureCustomOverlayButtonsInBounds);
+        updateCustomOverlayControlsState();
+    }
+
+    private void loadCustomOverlayButtons() {
+        customOverlayButtons.clear();
+        customOverlayButtonCounter = 0;
+
+        String raw = prefs.get().getString(PREF_CUSTOM_OVERLAY_BUTTONS, "[]");
+        try {
+            JSONArray items = new JSONArray(raw);
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null)
+                    continue;
+
+                OverlayButtonSpec spec = new OverlayButtonSpec();
+                spec.id = item.optString("id", "overlay_" + (i + 1));
+                spec.label = item.optString("label", "B" + (i + 1));
+                spec.x = (float) item.optDouble("x", dpToPx(16 + (i * 12)));
+                spec.y = (float) item.optDouble("y", dpToPx(96 + (i * 12)));
+                customOverlayButtons.add(spec);
+
+                int suffix = extractOverlayButtonIndex(spec.id);
+                if (suffix > customOverlayButtonCounter)
+                    customOverlayButtonCounter = suffix;
+            }
+        } catch (JSONException e) {
+            Log.w("MainActivity", "Failed to parse custom overlay buttons", e);
+        }
+    }
+
+    private void saveCustomOverlayButtons() {
+        JSONArray items = new JSONArray();
+        for (OverlayButtonSpec spec : customOverlayButtons) {
+            JSONObject item = new JSONObject();
+            try {
+                item.put("id", spec.id);
+                item.put("label", spec.label);
+                item.put("x", spec.x);
+                item.put("y", spec.y);
+                items.put(item);
+            } catch (JSONException e) {
+                Log.w("MainActivity", "Failed to serialize custom overlay button", e);
+            }
+        }
+        prefs.get().edit().putString(PREF_CUSTOM_OVERLAY_BUTTONS, items.toString()).apply();
+    }
+
+    private void addCustomOverlayButton() {
+        OverlayButtonSpec spec = new OverlayButtonSpec();
+        spec.id = "overlay_" + (++customOverlayButtonCounter);
+        spec.label = "B" + customOverlayButtonCounter;
+
+        int width = dpToPx(CUSTOM_OVERLAY_BUTTON_WIDTH_DP);
+        int height = dpToPx(CUSTOM_OVERLAY_BUTTON_HEIGHT_DP);
+        float baseOffset = dpToPx(16 + (customOverlayButtons.size() * 12));
+        spec.x = clampCustomOverlayX(baseOffset, width);
+        spec.y = clampCustomOverlayY(dpToPx(96) + baseOffset, height);
+
+        customOverlayButtons.add(spec);
+        customOverlayEditMode = true;
+        selectedCustomOverlayButtonId = spec.id;
+        saveCustomOverlayButtons();
+        renderCustomOverlayButtons();
+    }
+
+    private void removeSelectedCustomOverlayButton() {
+        if (selectedCustomOverlayButtonId == null)
+            return;
+
+        for (int i = 0; i < customOverlayButtons.size(); i++) {
+            if (selectedCustomOverlayButtonId.equals(customOverlayButtons.get(i).id)) {
+                customOverlayButtons.remove(i);
+                break;
+            }
+        }
+
+        selectedCustomOverlayButtonId = customOverlayButtons.isEmpty() ? null : customOverlayButtons.get(customOverlayButtons.size() - 1).id;
+        saveCustomOverlayButtons();
+        renderCustomOverlayButtons();
+    }
+
+    private void renderCustomOverlayButtons() {
+        if (customOverlayButtonsContainer == null)
+            return;
+
+        customOverlayButtonsContainer.removeAllViews();
+
+        final int buttonWidth = dpToPx(CUSTOM_OVERLAY_BUTTON_WIDTH_DP);
+        final int buttonHeight = dpToPx(CUSTOM_OVERLAY_BUTTON_HEIGHT_DP);
+
+        for (OverlayButtonSpec spec : customOverlayButtons) {
+            spec.x = clampCustomOverlayX(spec.x, buttonWidth);
+            spec.y = clampCustomOverlayY(spec.y, buttonHeight);
+
+            Button button = new Button(this);
+            button.setAllCaps(false);
+            button.setText(customOverlayEditMode && spec.id.equals(selectedCustomOverlayButtonId) ? "[" + spec.label + "]" : spec.label);
+            button.setAlpha(isInPictureInPictureMode ? 0f : (customOverlayEditMode ? 0.92f : 0.78f));
+            button.setOnClickListener(v -> {
+                if (!customOverlayEditMode)
+                    toggleKeyboardVisibility(MainActivity.this);
+            });
+            button.setOnLongClickListener(v -> {
+                if (!customOverlayEditMode)
+                    return false;
+
+                selectedCustomOverlayButtonId = spec.id;
+                removeSelectedCustomOverlayButton();
+                return true;
+            });
+            button.setOnTouchListener(new View.OnTouchListener() {
+                final int touchSlop = ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
+                float downRawX;
+                float downRawY;
+                float startX;
+                float startY;
+                boolean dragging;
+
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    if (!customOverlayEditMode)
+                        return false;
+
+                    switch (event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            selectedCustomOverlayButtonId = spec.id;
+                            downRawX = event.getRawX();
+                            downRawY = event.getRawY();
+                            startX = spec.x;
+                            startY = spec.y;
+                            dragging = false;
+                            updateCustomOverlayControlsState();
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            float dx = event.getRawX() - downRawX;
+                            float dy = event.getRawY() - downRawY;
+                            if (!dragging && (dx * dx + dy * dy) > (touchSlop * touchSlop))
+                                dragging = true;
+                            if (dragging) {
+                                spec.x = clampCustomOverlayX(startX + dx, buttonWidth);
+                                spec.y = clampCustomOverlayY(startY + dy, buttonHeight);
+                                v.setX(spec.x);
+                                v.setY(spec.y);
+                            }
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            if (!dragging) {
+                                selectedCustomOverlayButtonId = spec.id;
+                                renderCustomOverlayButtons();
+                            } else {
+                                saveCustomOverlayButtons();
+                            }
+                            updateCustomOverlayControlsState();
+                            return true;
+                    }
+                    return false;
+                }
+            });
+
+            FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(buttonWidth, buttonHeight);
+            customOverlayButtonsContainer.addView(button, layoutParams);
+            button.setX(spec.x);
+            button.setY(spec.y);
+        }
+
+        customOverlayButtonsContainer.setAlpha(isInPictureInPictureMode ? 0f : 1f);
+        updateCustomOverlayControlsState();
+    }
+
+    private void ensureCustomOverlayButtonsInBounds() {
+        if (customOverlayButtonsContainer == null)
+            return;
+
+        boolean changed = false;
+        int buttonWidth = dpToPx(CUSTOM_OVERLAY_BUTTON_WIDTH_DP);
+        int buttonHeight = dpToPx(CUSTOM_OVERLAY_BUTTON_HEIGHT_DP);
+        for (OverlayButtonSpec spec : customOverlayButtons) {
+            float clampedX = clampCustomOverlayX(spec.x, buttonWidth);
+            float clampedY = clampCustomOverlayY(spec.y, buttonHeight);
+            if (clampedX != spec.x || clampedY != spec.y) {
+                spec.x = clampedX;
+                spec.y = clampedY;
+                changed = true;
+            }
+        }
+
+        if (changed)
+            saveCustomOverlayButtons();
+        if (customOverlayButtonsContainer.getChildCount() != customOverlayButtons.size()) {
+            renderCustomOverlayButtons();
+            return;
+        }
+
+        for (int i = 0; i < customOverlayButtons.size(); i++) {
+            View child = customOverlayButtonsContainer.getChildAt(i);
+            OverlayButtonSpec spec = customOverlayButtons.get(i);
+            child.setX(spec.x);
+            child.setY(spec.y);
+        }
+    }
+
+    private void updateCustomOverlayControlsState() {
+        if (customOverlayControls == null)
+            return;
+
+        customOverlayControls.setAlpha(isInPictureInPictureMode ? 0f : 1f);
+        customOverlayEditButton.setText(customOverlayEditMode ? R.string.custom_overlay_done : R.string.custom_overlay_edit);
+        customOverlayRemoveButton.setEnabled(selectedCustomOverlayButtonId != null);
+        customOverlayRemoveButton.setAlpha(selectedCustomOverlayButtonId != null ? 1f : 0.45f);
+    }
+
+    private float clampCustomOverlayX(float x, int buttonWidth) {
+        int containerWidth = customOverlayButtonsContainer != null && customOverlayButtonsContainer.getWidth() > 0
+                ? customOverlayButtonsContainer.getWidth()
+                : getResources().getDisplayMetrics().widthPixels;
+        return MathUtils.clamp(x, 0f, Math.max(0, containerWidth - buttonWidth));
+    }
+
+    private float clampCustomOverlayY(float y, int buttonHeight) {
+        int containerHeight = customOverlayButtonsContainer != null && customOverlayButtonsContainer.getHeight() > 0
+                ? customOverlayButtonsContainer.getHeight()
+                : getResources().getDisplayMetrics().heightPixels;
+        int pagerHeight = getTerminalToolbarViewPager().getVisibility() == View.VISIBLE ? getTerminalToolbarViewPager().getHeight() : 0;
+        return MathUtils.clamp(y, 0f, Math.max(0, containerHeight - buttonHeight - pagerHeight));
+    }
+
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private int extractOverlayButtonIndex(String id) {
+        int pos = id.lastIndexOf('_');
+        if (pos < 0 || pos == id.length() - 1)
+            return 0;
+
+        try {
+            return Integer.parseInt(id.substring(pos + 1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     //Register the needed events to handle stylus as left, middle and right click
@@ -417,6 +701,7 @@ public class MainActivity extends AppCompatActivity {
 
         stylusAuxButtons.setX(MathUtils.clamp(stylusAuxButtons.getX(), frm.getX(), frm.getX() + frm.getWidth() - stylusAuxButtons.getWidth()));
         stylusAuxButtons.setY(MathUtils.clamp(stylusAuxButtons.getY(), frm.getY(), frm.getY() + frm.getHeight() - stylusAuxButtons.getHeight() - maxYDecrement));
+        ensureCustomOverlayButtonsInBounds();
     }
 
     public void toggleStylusAuxButtons() {
@@ -760,6 +1045,10 @@ public class MainActivity extends AppCompatActivity {
         final ViewPager pager = getTerminalToolbarViewPager();
         pager.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.opacityEKBar.get())/100);
         findViewById(R.id.mouse_helper_visibility).setAlpha(isInPictureInPictureMode ? 0.f : 1.f);
+        if (customOverlayButtonsContainer != null)
+            customOverlayButtonsContainer.setAlpha(isInPictureInPictureMode ? 0f : 1f);
+        if (customOverlayControls != null)
+            customOverlayControls.setAlpha(isInPictureInPictureMode ? 0f : 1f);
 
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
     }
@@ -836,5 +1125,12 @@ public class MainActivity extends AppCompatActivity {
         if (connected && !showIMEWhileExternalConnected)
             inputMethodManager.hideSoftInputFromWindow(getWindow().getDecorView().getRootView().getWindowToken(), 0);
         getLorieView().requestFocus();
+    }
+
+    private static final class OverlayButtonSpec {
+        String id;
+        String label;
+        float x;
+        float y;
     }
 }
