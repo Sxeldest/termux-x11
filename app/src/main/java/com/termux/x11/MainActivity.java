@@ -372,11 +372,18 @@ public class MainActivity extends AppCompatActivity {
             applyMouseButtonsImeLayout(true);
         } else if (!imeVisible && mouseButtonsImeAdjusted) {
             applyMouseButtonsImeLayout(false);
-            if (mouseButtonsHomeSet) {
-                primaryLayer.setX(mouseButtonsHomeX);
-                primaryLayer.setY(mouseButtonsHomeY);
-            }
             mouseButtonsImeAdjusted = false;
+            primaryLayer.post(() -> {
+                if (!imeVisible && mouseButtonsHomeSet) {
+                    primaryLayer.setX(mouseButtonsHomeX);
+                    primaryLayer.setY(mouseButtonsHomeY);
+                }
+                makeSureHelpersAreVisibleAndInScreenBounds();
+                if (!imeVisible && mouseButtonsHomeSet) {
+                    primaryLayer.setX(mouseButtonsHomeX);
+                    primaryLayer.setY(mouseButtonsHomeY);
+                }
+            });
         }
 
         if (imeVisible) {

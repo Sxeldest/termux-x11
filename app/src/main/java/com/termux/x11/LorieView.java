@@ -677,15 +677,14 @@ public class LorieView extends SurfaceView implements InputStub {
         if (p.x <= 0 || p.y <= 0)
             return;
 
-        if (reseedStretch) {
-            float scale = Math.min(1f, Math.min(((float) getMeasuredWidth()) / p.x, ((float) getMeasuredHeight()) / p.y));
-            getHolder().setFixedSize(p.x, p.y);
-            setMeasuredDimension(Math.round(p.x * scale), Math.round(p.y * scale));
-            return;
-        }
-
         int width = getMeasuredWidth();
         int height = getMeasuredHeight();
+
+        if (reseedStretch) {
+            getHolder().setFixedSize(p.x, p.y);
+            setMeasuredDimension(width, height);
+            return;
+        }
 
         if (prefs.adjustResolution.get() && ((width < height && p.x > p.y) || (width > height && p.x < p.y)))
             //noinspection SuspiciousNameCombination
