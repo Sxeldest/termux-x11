@@ -651,6 +651,15 @@ public class LorieView extends SurfaceView implements InputStub {
             p.set(w, h);
     }
 
+    private boolean reseedStretch = false;
+
+    public void setReseedStretch(boolean enabled) {
+        if (reseedStretch == enabled)
+            return;
+        reseedStretch = enabled;
+        requestLayout();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -667,6 +676,12 @@ public class LorieView extends SurfaceView implements InputStub {
 
         if (p.x <= 0 || p.y <= 0)
             return;
+
+        if (reseedStretch) {
+            getHolder().setFixedSize(p.x, p.y);
+            setMeasuredDimension(getMeasuredWidth(), getMeasuredHeight());
+            return;
+        }
 
         int width = getMeasuredWidth();
         int height = getMeasuredHeight();

@@ -43,6 +43,8 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="lorie_pref_displayStretch">Stretch to fit display</string>
     <string name="lorie_pref_Reseed">Reseed screen while soft keyboard is open</string>
     <string name="lorie_pref_Reseed_summary">The screen size will be adjusted while Soft Keyboard is open.</string>
+    <string name="lorie_pref_reseedMode">Reseed mode</string>
+    <string name="lorie_pref_reseedMode_summary">Normal or stretch while soft keyboard is open</string>
     <string name="lorie_pref_PIP">PIP mode</string>
     <string name="lorie_pref_PIP_summary">Show app in picture-in-picture mode when home button or recents button is pressed</string>
     <string name="lorie_pref_fullscreen">Fullscreen</string>

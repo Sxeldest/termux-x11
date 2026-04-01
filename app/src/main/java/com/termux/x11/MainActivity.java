@@ -22,6 +22,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.net.Uri;
@@ -281,12 +282,37 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
         ViewCompat.requestApplyInsets(root);
+
+        View decor = getWindow().getDecorView();
+        decor.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            Rect r = new Rect();
+            decor.getWindowVisibleDisplayFrame(r);
+            int screenHeight = decor.getRootView().getHeight();
+            int heightDiff = Math.max(0, screenHeight - r.bottom);
+
+            int threshold = (int) (100 * getResources().getDisplayMetrics().density);
+            boolean newImeVisible = heightDiff > threshold;
+            int newImeBottom = newImeVisible ? heightDiff : 0;
+
+            if (imeVisible != newImeVisible || imeBottomInsetPx != newImeBottom)
+                onImeInsetsChanged(newImeVisible, newImeBottom);
+        });
     }
 
     private void onImeInsetsChanged(boolean newImeVisible, int newImeBottomInsetPx) {
         imeVisible = newImeVisible;
         imeBottomInsetPx = newImeBottomInsetPx;
         updateMouseButtonsForIme();
+        updateReseedStretchState();
+    }
+
+    private void updateReseedStretchState() {
+        LorieView lorieView = getLorieView();
+        if (lorieView == null)
+            return;
+
+        boolean enabled = imeVisible && prefs != null && prefs.Reseed.get() && "stretch".equals(prefs.reseedMode.get());
+        lorieView.setReseedStretch(enabled);
     }
 
     private void updateMouseButtonsForIme() {
@@ -323,6 +349,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout secondaryLayer = findViewById(R.id.mouse_buttons_secondary_layer);
         Button left = findViewById(R.id.mouse_button_left_click);
         Button right = findViewById(R.id.mouse_button_right_click);
+        ImageButton pos = findViewById(R.id.mouse_buttons_position);
 
         if (primaryLayer == null || secondaryLayer == null || left == null || right == null)
             return;
@@ -341,6 +368,11 @@ public class MainActivity extends AppCompatActivity {
             secondaryLayer.setOrientation(LinearLayout.HORIZONTAL);
             setSize(left, 96, 48);
             setSize(right, 96, 48);
+            if (pos != null) {
+                pos.setPressed(false);
+                pos.setEnabled(false);
+                pos.setAlpha(0.6f);
+            }
         } else {
             primaryLayer.setOrientation(LinearLayout.VERTICAL);
             if (mouseButtonsLayoutSaved) {
@@ -348,6 +380,10 @@ public class MainActivity extends AppCompatActivity {
                 restoreSize(left, mouseButtonsSavedLeftW, mouseButtonsSavedLeftH);
                 restoreSize(right, mouseButtonsSavedRightW, mouseButtonsSavedRightH);
                 mouseButtonsLayoutSaved = false;
+            }
+            if (pos != null) {
+                pos.setEnabled(true);
+                pos.setAlpha(1f);
             }
         }
     }
@@ -580,6 +616,10 @@ public class MainActivity extends AppCompatActivity {
             long startTime;
             @Override
             public boolean onTouch(View v, MotionEvent e) {
+                if (imeVisible) {
+                    pos.setPressed(false);
+                    return true;
+                }
                 switch(e.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         primaryLayer.getLocationInWindow(startPosition);
@@ -701,6 +741,7 @@ public class MainActivity extends AppCompatActivity {
 
         mInputHandler.reloadPreferences(prefs);
         lorieView.reloadPreferences(prefs);
+        updateReseedStretchState();
 
         setTerminalToolbarView();
 

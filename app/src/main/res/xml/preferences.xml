@@ -17,6 +17,7 @@
         <SwitchPreferenceCompat app:key="adjustResolution" app:defaultValue="false" />
         <SwitchPreferenceCompat app:key="displayStretch" app:defaultValue="false" />
         <SwitchPreferenceCompat app:key="Reseed" app:defaultValue="true" />
+        <ListPreference app:key="reseedMode" app:defaultValue="normal" app:entries="@array/reseedModeEntries" app:entryValues="@array/reseedModeValues" />
         <SwitchPreferenceCompat app:key="PIP" app:defaultValue="false" />
         <SwitchPreferenceCompat app:key="fullscreen" app:defaultValue="false" />
         <ListPreference app:key="forceOrientation" app:defaultValue="auto" app:entries="@array/forceOrientationVariants" app:entryValues="@array/forceOrientationVariants" />
