@@ -353,6 +353,7 @@ public class MainActivity extends AppCompatActivity {
 
         boolean enabled = imeVisible && prefs != null && prefs.Reseed.get() && "stretch".equals(prefs.reseedMode.get());
         lorieView.setReseedStretch(enabled);
+        lorieView.setTranslationY(enabled ? -imeBottomInsetPx : 0f);
     }
 
     private void updateMouseButtonsForIme() {

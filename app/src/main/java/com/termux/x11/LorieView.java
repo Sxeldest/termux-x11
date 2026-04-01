@@ -682,7 +682,7 @@ public class LorieView extends SurfaceView implements InputStub {
 
         if (reseedStretch) {
             getHolder().setSizeFromLayout();
-            setMeasuredDimension(width, height);
+            setMeasuredDimension(p.x, height);
             return;
         }
 
