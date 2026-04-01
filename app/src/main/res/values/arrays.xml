@@ -86,12 +86,4 @@
         <item>reverse landscape</item>
     </string-array>
 
-    <string-array name="reseedModeEntries">
-        <item>Normal</item>
-        <item>Stretch</item>
-    </string-array>
-    <string-array name="reseedModeValues">
-        <item>normal</item>
-        <item>stretch</item>
-    </string-array>
 </resources>
