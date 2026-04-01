@@ -33,7 +33,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
-import android.os.SystemClock;
 import android.service.notification.StatusBarNotification;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -44,7 +43,6 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.Window;
@@ -52,7 +50,6 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.ImageButton;
 import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
@@ -64,15 +61,12 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.viewpager.widget.ViewPager;
 
 import com.termux.x11.input.InputEventSender;
-import com.termux.x11.input.InputStub;
 import com.termux.x11.input.TouchInputHandler;
 import com.termux.x11.utils.FullscreenWorkaround;
 import com.termux.x11.utils.KeyInterceptor;
 import com.termux.x11.utils.SamsungDexUtils;
 import com.termux.x11.utils.TermuxX11ExtraKeys;
 import com.termux.x11.utils.X11ToolbarViewPager;
-
-import java.util.Map;
 
 @SuppressLint("ApplySharedPref")
 @SuppressWarnings({"deprecation", "unused"})
@@ -98,17 +92,6 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean imeVisible = false;
     private int imeBottomInsetPx = 0;
-    private boolean mouseButtonsImeAdjusted = false;
-    private float mouseButtonsHomeX = 0f;
-    private float mouseButtonsHomeY = 0f;
-    private boolean mouseButtonsHomeSet = false;
-    private boolean mouseButtonsLayoutSaved = false;
-    private int mouseButtonsSavedSecondaryOrientation = LinearLayout.HORIZONTAL;
-    private int mouseButtonsSavedLeftW = 0, mouseButtonsSavedLeftH = 0;
-    private int mouseButtonsSavedRightW = 0, mouseButtonsSavedRightH = 0;
-    private int mouseButtonsSavedKbdW = 0, mouseButtonsSavedKbdH = 0;
-    private int mouseButtonsSavedPosVisibility = View.VISIBLE;
-    private boolean mouseButtonsSavedChildrenOrder = false;
 
     public static Prefs prefs = null;
 
@@ -256,7 +239,6 @@ public class MainActivity extends AppCompatActivity {
         toggleExtraKeys(false, false);
 
         initStylusAuxButtons();
-        initMouseAuxButtons();
 
         if (SDK_INT >= VERSION_CODES.TIRAMISU
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PERMISSION_GRANTED
@@ -266,7 +248,6 @@ public class MainActivity extends AppCompatActivity {
 
         onReceiveConnection(getIntent());
         findViewById(android.R.id.content).addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-            updateMouseButtonsForIme();
             makeSureHelpersAreVisibleAndInScreenBounds();
         });
     }
@@ -306,44 +287,7 @@ public class MainActivity extends AppCompatActivity {
     private void onImeInsetsChanged(boolean newImeVisible, int newImeBottomInsetPx) {
         imeVisible = newImeVisible;
         imeBottomInsetPx = newImeBottomInsetPx;
-        updateMouseButtonsForIme();
         updateReseedStretchState();
-    }
-
-    private void recordMouseButtonsHomePosition() {
-        if (imeVisible)
-            return;
-
-        View v = findViewById(R.id.mouse_buttons);
-        if (v == null)
-            return;
-
-        mouseButtonsHomeX = v.getX();
-        mouseButtonsHomeY = v.getY();
-        mouseButtonsHomeSet = true;
-    }
-
-    private float getMouseButtonsMaxY(View mouseButtons) {
-        final ViewPager pager = getTerminalToolbarViewPager();
-        int maxYDecrement = (pager.getVisibility() == View.VISIBLE) ? pager.getHeight() : 0;
-
-        View root = findViewById(android.R.id.content);
-        if (root == null || frm == null || mouseButtons == null)
-            return 0f;
-
-        Rect visible = new Rect();
-        getWindow().getDecorView().getWindowVisibleDisplayFrame(visible);
-
-        int[] rootPos = new int[2];
-        root.getLocationInWindow(rootPos);
-
-        int[] frmPos = new int[2];
-        frm.getLocationInWindow(frmPos);
-        int frmBottomWindow = frmPos[1] + frm.getHeight();
-
-        int safeBottomWindow = Math.min(frmBottomWindow, visible.bottom);
-        float safeBottomInRoot = safeBottomWindow - rootPos[1];
-        return safeBottomInRoot - mouseButtons.getHeight() - maxYDecrement;
     }
 
     private void updateReseedStretchState() {
@@ -352,123 +296,6 @@ public class MainActivity extends AppCompatActivity {
             return;
 
         lorieView.setTranslationY(0f);
-    }
-
-    private void updateMouseButtonsForIme() {
-        LinearLayout primaryLayer = findViewById(R.id.mouse_buttons);
-        if (primaryLayer == null)
-            return;
-
-        if (imeVisible && !mouseButtonsImeAdjusted) {
-            mouseButtonsImeAdjusted = true;
-            if (!mouseButtonsHomeSet)
-                recordMouseButtonsHomePosition();
-            float restoreX = mouseButtonsHomeSet ? mouseButtonsHomeX : primaryLayer.getX();
-            float restoreY = mouseButtonsHomeSet ? mouseButtonsHomeY : primaryLayer.getY();
-            mouseButtonsHomeX = restoreX;
-            mouseButtonsHomeY = restoreY;
-            mouseButtonsHomeSet = true;
-            applyMouseButtonsImeLayout(true);
-        } else if (!imeVisible && mouseButtonsImeAdjusted) {
-            applyMouseButtonsImeLayout(false);
-            mouseButtonsImeAdjusted = false;
-            primaryLayer.post(() -> {
-                if (!imeVisible && mouseButtonsHomeSet) {
-                    primaryLayer.setX(mouseButtonsHomeX);
-                    primaryLayer.setY(mouseButtonsHomeY);
-                }
-                makeSureHelpersAreVisibleAndInScreenBounds();
-                if (!imeVisible && mouseButtonsHomeSet) {
-                    primaryLayer.setX(mouseButtonsHomeX);
-                    primaryLayer.setY(mouseButtonsHomeY);
-                }
-            });
-        }
-
-        if (imeVisible) {
-            float y = Math.max(frm.getY(), getMouseButtonsMaxY(primaryLayer));
-            primaryLayer.setX(frm.getX());
-            primaryLayer.setY(y);
-        } else {
-            makeSureHelpersAreVisibleAndInScreenBounds();
-        }
-    }
-
-    private void applyMouseButtonsImeLayout(boolean enabled) {
-        LinearLayout primaryLayer = findViewById(R.id.mouse_buttons);
-        LinearLayout secondaryLayer = findViewById(R.id.mouse_buttons_secondary_layer);
-        LinearLayout bottomRow = findViewById(R.id.mouse_buttons_bottom_row);
-        Button left = findViewById(R.id.mouse_button_left_click);
-        Button right = findViewById(R.id.mouse_button_right_click);
-        ImageButton pos = findViewById(R.id.mouse_buttons_position);
-        ImageButton kbd = findViewById(R.id.mouse_buttons_keyboard);
-
-        if (primaryLayer == null || secondaryLayer == null || bottomRow == null || left == null || right == null)
-            return;
-
-        if (enabled) {
-            if (!mouseButtonsLayoutSaved) {
-                mouseButtonsLayoutSaved = true;
-                mouseButtonsSavedSecondaryOrientation = secondaryLayer.getOrientation();
-                mouseButtonsSavedLeftW = left.getLayoutParams().width;
-                mouseButtonsSavedLeftH = left.getLayoutParams().height;
-                mouseButtonsSavedRightW = right.getLayoutParams().width;
-                mouseButtonsSavedRightH = right.getLayoutParams().height;
-                if (kbd != null) {
-                    mouseButtonsSavedKbdW = kbd.getLayoutParams().width;
-                    mouseButtonsSavedKbdH = kbd.getLayoutParams().height;
-                }
-                if (pos != null)
-                    mouseButtonsSavedPosVisibility = pos.getVisibility();
-                mouseButtonsSavedChildrenOrder = primaryLayer.getChildCount() == 2
-                        && primaryLayer.getChildAt(0).getId() == R.id.mouse_buttons_secondary_layer
-                        && primaryLayer.getChildAt(1).getId() == R.id.mouse_buttons_bottom_row;
-            }
-
-            primaryLayer.setOrientation(LinearLayout.HORIZONTAL);
-            secondaryLayer.setOrientation(LinearLayout.HORIZONTAL);
-            if (mouseButtonsSavedChildrenOrder) {
-                primaryLayer.removeView(bottomRow);
-                primaryLayer.addView(bottomRow, 0);
-            }
-            setSize(left, 96, 48);
-            setSize(right, 96, 48);
-            if (pos != null) {
-                pos.setPressed(false);
-                pos.setVisibility(View.GONE);
-            }
-            if (kbd != null)
-                setSize(kbd, 48, 48);
-        } else {
-            primaryLayer.setOrientation(LinearLayout.VERTICAL);
-            if (mouseButtonsLayoutSaved) {
-                secondaryLayer.setOrientation(mouseButtonsSavedSecondaryOrientation);
-                restoreSize(left, mouseButtonsSavedLeftW, mouseButtonsSavedLeftH);
-                restoreSize(right, mouseButtonsSavedRightW, mouseButtonsSavedRightH);
-                if (kbd != null)
-                    restoreSize(kbd, mouseButtonsSavedKbdW, mouseButtonsSavedKbdH);
-                mouseButtonsLayoutSaved = false;
-            }
-            if (pos != null) {
-                pos.setVisibility(mouseButtonsSavedPosVisibility);
-            }
-            if (mouseButtonsSavedChildrenOrder) {
-                primaryLayer.removeView(secondaryLayer);
-                primaryLayer.removeView(bottomRow);
-                primaryLayer.addView(secondaryLayer, 0);
-                primaryLayer.addView(bottomRow, 1);
-                mouseButtonsSavedChildrenOrder = false;
-            }
-        }
-    }
-
-    private void restoreSize(View v, int widthPx, int heightPx) {
-        ViewGroup.LayoutParams p = v.getLayoutParams();
-        p.width = widthPx;
-        p.height = heightPx;
-        v.setLayoutParams(p);
-        v.setMinimumWidth(widthPx);
-        v.setMinimumHeight(heightPx);
     }
 
     //Register the needed events to handle stylus as left, middle and right click
@@ -585,14 +412,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void makeSureHelpersAreVisibleAndInScreenBounds() {
         final ViewPager pager = getTerminalToolbarViewPager();
-        View mouseAuxButtons = findViewById(R.id.mouse_buttons);
         View stylusAuxButtons = findViewById(R.id.mouse_helper_visibility);
         int maxYDecrement = (pager.getVisibility() == View.VISIBLE) ? pager.getHeight() : 0;
-
-        mouseAuxButtons.setX(MathUtils.clamp(mouseAuxButtons.getX(), frm.getX(), frm.getX() + frm.getWidth() - mouseAuxButtons.getWidth()));
-        mouseAuxButtons.setY(MathUtils.clamp(mouseAuxButtons.getY(), frm.getY(), Math.max(frm.getY(), getMouseButtonsMaxY(mouseAuxButtons))));
-        if (!imeVisible && !mouseButtonsImeAdjusted)
-            recordMouseButtonsHomePosition();
 
         stylusAuxButtons.setX(MathUtils.clamp(stylusAuxButtons.getX(), frm.getX(), frm.getX() + frm.getWidth() - stylusAuxButtons.getWidth()));
         stylusAuxButtons.setY(MathUtils.clamp(stylusAuxButtons.getY(), frm.getY(), frm.getY() + frm.getHeight() - stylusAuxButtons.getHeight() - maxYDecrement));
@@ -603,19 +424,6 @@ public class MainActivity extends AppCompatActivity {
         makeSureHelpersAreVisibleAndInScreenBounds();
     }
 
-    private void showMouseAuxButtons(boolean show) {
-        View v = findViewById(R.id.mouse_buttons);
-        v.setVisibility((LorieView.connected() && show && "1".equals(prefs.touchMode.get())) ? View.VISIBLE : View.GONE);
-        v.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
-        makeSureHelpersAreVisibleAndInScreenBounds();
-        if (!imeVisible && show)
-            recordMouseButtonsHomePosition();
-    }
-
-    public void toggleMouseAuxButtons() {
-        showMouseAuxButtons(findViewById(R.id.mouse_buttons).getVisibility() != View.VISIBLE);
-    }
-
     void setSize(View v, int width, int height) {
         ViewGroup.LayoutParams p = v.getLayoutParams();
         p.width = (int) (width * getResources().getDisplayMetrics().density);
@@ -623,164 +431,6 @@ public class MainActivity extends AppCompatActivity {
         v.setLayoutParams(p);
         v.setMinimumWidth((int) (width * getResources().getDisplayMetrics().density));
         v.setMinimumHeight((int) (height * getResources().getDisplayMetrics().density));
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    void initMouseAuxButtons() {
-        final ViewPager pager = getTerminalToolbarViewPager();
-        Button left = findViewById(R.id.mouse_button_left_click);
-        Button right = findViewById(R.id.mouse_button_right_click);
-        Button middle = findViewById(R.id.mouse_button_middle_click);
-        ImageButton pos = findViewById(R.id.mouse_buttons_position);
-        ImageButton kbd = findViewById(R.id.mouse_buttons_keyboard);
-        LinearLayout primaryLayer = findViewById(R.id.mouse_buttons);
-        LinearLayout secondaryLayer = findViewById(R.id.mouse_buttons_secondary_layer);
-
-        boolean mouseHelperEnabled = prefs.showMouseHelper.get() && "1".equals(prefs.touchMode.get());
-        primaryLayer.setVisibility(mouseHelperEnabled ? View.VISIBLE : View.GONE);
-        primaryLayer.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
-
-        pos.setOnClickListener((v) -> {
-            if (imeVisible)
-                return;
-            if (secondaryLayer.getOrientation() == LinearLayout.HORIZONTAL) {
-                setSize(left, 48, 96);
-                setSize(right, 48, 96);
-                secondaryLayer.setOrientation(LinearLayout.VERTICAL);
-            } else {
-                setSize(left, 96, 48);
-                setSize(right, 96, 48);
-                secondaryLayer.setOrientation(LinearLayout.HORIZONTAL);
-            }
-            handler.postDelayed(() -> {
-                float maxX = frm.getX() + frm.getWidth() - primaryLayer.getWidth();
-                float maxY = Math.max(frm.getY(), getMouseButtonsMaxY(primaryLayer));
-                primaryLayer.setX(MathUtils.clamp(primaryLayer.getX(), frm.getX(), maxX));
-                primaryLayer.setY(MathUtils.clamp(primaryLayer.getY(), frm.getY(), maxY));
-            }, 10);
-        });
-
-        kbd.setOnClickListener((v) -> toggleKeyboardVisibility(MainActivity.this));
-
-        Map.of(left, InputStub.BUTTON_LEFT, right, InputStub.BUTTON_RIGHT)
-                .forEach((v, b) -> v.setOnTouchListener((__, e) -> {
-            switch(e.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                case MotionEvent.ACTION_POINTER_DOWN:
-                    getLorieView().sendMouseEvent(0, 0, b, true, true);
-                    v.setPressed(true);
-                    break;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_POINTER_UP:
-                    getLorieView().sendMouseEvent(0, 0, b, false, true);
-                    v.setPressed(false);
-                    break;
-            }
-            return true;
-        }));
-
-        middle.setOnTouchListener(new View.OnTouchListener() {
-            final int touchSlop = ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
-            final int scrollStepPx = (int) (24 * getResources().getDisplayMetrics().density);
-            float startX, startY, lastY, accumulatedDy;
-            boolean scrolling;
-
-            @Override
-            public boolean onTouch(View v, MotionEvent e) {
-                switch (e.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        startX = e.getX();
-                        startY = e.getY();
-                        lastY = startY;
-                        accumulatedDy = 0;
-                        scrolling = false;
-                        v.setPressed(true);
-                        return true;
-
-                    case MotionEvent.ACTION_MOVE: {
-                        float dx = e.getX() - startX;
-                        float dy = e.getY() - startY;
-                        if (!scrolling && Math.abs(dy) > touchSlop && Math.abs(dy) > Math.abs(dx)) {
-                            scrolling = true;
-                            v.setPressed(true);
-                        }
-
-                        if (scrolling) {
-                            float delta = e.getY() - lastY;
-                            lastY = e.getY();
-                            accumulatedDy += delta;
-
-                            while (Math.abs(accumulatedDy) >= scrollStepPx) {
-                                float direction = Math.signum(accumulatedDy);
-                                getLorieView().sendMouseWheelEvent(0, direction > 0 ? 100 : -100);
-                                accumulatedDy -= direction * scrollStepPx;
-                            }
-                        }
-                        return true;
-                    }
-
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        v.setPressed(false);
-                        if (!scrolling && e.getActionMasked() == MotionEvent.ACTION_UP) {
-                            getLorieView().sendMouseEvent(0, 0, InputStub.BUTTON_MIDDLE, true, true);
-                            getLorieView().sendMouseEvent(0, 0, InputStub.BUTTON_MIDDLE, false, true);
-                        }
-                        return true;
-                }
-                return true;
-            }
-        });
-
-        pos.setOnTouchListener(new View.OnTouchListener() {
-            final int touchSlop = (int) Math.pow(ViewConfiguration.get(MainActivity.this).getScaledTouchSlop(), 2);
-            final int tapTimeout = ViewConfiguration.getTapTimeout();
-            final float[] startOffset = new float[2];
-            final int[] startPosition = new int[2];
-            long startTime;
-            @Override
-            public boolean onTouch(View v, MotionEvent e) {
-                if (imeVisible) {
-                    pos.setPressed(false);
-                    return true;
-                }
-                switch(e.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        primaryLayer.getLocationInWindow(startPosition);
-                        startOffset[0] = e.getX();
-                        startOffset[1] = e.getY();
-                        startTime = SystemClock.uptimeMillis();
-                        pos.setPressed(true);
-                        break;
-                    case MotionEvent.ACTION_MOVE: {
-                        final ViewPager pager = getTerminalToolbarViewPager();
-                        int[] offset = new int[2];
-                        primaryLayer.getLocationInWindow(offset);
-                        float maxX = frm.getX() + frm.getWidth() - primaryLayer.getWidth();
-                        float maxY = Math.max(frm.getY(), getMouseButtonsMaxY(primaryLayer));
-
-                        primaryLayer.setX(MathUtils.clamp(offset[0] - startOffset[0] + e.getX(), frm.getX(), maxX));
-                        primaryLayer.setY(MathUtils.clamp(offset[1] - startOffset[1] + e.getY(), frm.getY(), maxY));
-                        break;
-                    }
-                    case MotionEvent.ACTION_UP: {
-                        final int[] _pos = new int[2];
-                        primaryLayer.getLocationInWindow(_pos);
-                        int deltaX = (int) (startOffset[0] - e.getX()) + (startPosition[0] - _pos[0]);
-                        int deltaY = (int) (startOffset[1] - e.getY()) + (startPosition[1] - _pos[1]);
-                        pos.setPressed(false);
-
-                        if (deltaX * deltaX + deltaY * deltaY < touchSlop && SystemClock.uptimeMillis() - startTime <= tapTimeout) {
-                            v.performClick();
-                            return true;
-                        }
-                        recordMouseButtonsHomePosition();
-                        break;
-                    }
-                }
-                return true;
-            }
-        });
     }
 
     void onReceiveConnection(Intent intent) {
@@ -877,8 +527,6 @@ public class MainActivity extends AppCompatActivity {
         useTermuxEKBarBehaviour = prefs.useTermuxEKBarBehaviour.get();
         showIMEWhileExternalConnected = prefs.showIMEWhileExternalConnected.get();
 
-        findViewById(R.id.mouse_buttons).setVisibility(prefs.showMouseHelper.get() && "1".equals(prefs.touchMode.get()) && LorieView.connected() ? View.VISIBLE : View.GONE);
-        showMouseAuxButtons(prefs.showMouseHelper.get());
         showStylusAuxButtons(prefs.showStylusClickOverride.get());
 
         getTerminalToolbarViewPager().setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.opacityEKBar.get())/100);
@@ -1111,7 +759,6 @@ public class MainActivity extends AppCompatActivity {
         this.isInPictureInPictureMode = isInPictureInPictureMode;
         final ViewPager pager = getTerminalToolbarViewPager();
         pager.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.opacityEKBar.get())/100);
-        findViewById(R.id.mouse_buttons).setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
         findViewById(R.id.mouse_helper_visibility).setAlpha(isInPictureInPictureMode ? 0.f : 1.f);
 
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
@@ -1139,7 +786,6 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(()-> {
             boolean connected = LorieView.connected();
             setTerminalToolbarView();
-            findViewById(R.id.mouse_buttons).setVisibility(prefs.showMouseHelper.get() && "1".equals(prefs.touchMode.get()) && connected ? View.VISIBLE : View.GONE);
             findViewById(R.id.stub).setVisibility(connected?View.INVISIBLE:View.VISIBLE);
             getLorieView().setVisibility(connected?View.VISIBLE:View.INVISIBLE);
 

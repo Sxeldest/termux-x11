@@ -181,9 +181,7 @@ public class TermuxX11ExtraKeys implements ExtraKeysView.IExtraKeysView {
                             mEventListener.onKey(mActivity.getLorieView(), event.getKeyCode(), event);
                 }
             }
-        } else if ("MOUSE_HELPER".equals(key))
-            mActivity.toggleMouseAuxButtons();
-        else if ("STYLUS_HELPER".equals(key))
+        } else if ("STYLUS_HELPER".equals(key))
             mActivity.toggleStylusAuxButtons();
         else
             onTerminalExtraKeyButtonClick(view, key, ctrlDown, altDown, shiftDown, metaDown, fnDown);

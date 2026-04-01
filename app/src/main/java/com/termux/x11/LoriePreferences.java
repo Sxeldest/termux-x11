@@ -347,9 +347,6 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
             setEnabled("displayStretch", displayStretchEnabled);
             setEnabled("adjustResolution", displayStretchEnabled);
             setEnabled("scaleTouchpad", "1".equals(prefs.touchMode.get()) && !"native".equals(prefs.displayResolutionMode.get()));
-            setEnabled("showMouseHelper", "1".equals(prefs.touchMode.get()));
-            setEnabled("mouseHelperOpacity", "1".equals(prefs.touchMode.get()));
-
             boolean requestNotificationPermissionVisible =
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                     && ContextCompat.checkSelfPermission(requireContext(), POST_NOTIFICATIONS) == PERMISSION_DENIED;
