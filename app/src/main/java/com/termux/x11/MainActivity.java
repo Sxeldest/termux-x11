@@ -389,7 +389,7 @@ public class MainActivity extends AppCompatActivity {
     private void showMouseAuxButtons(boolean show) {
         View v = findViewById(R.id.mouse_buttons);
         v.setVisibility((LorieView.connected() && show && "1".equals(prefs.touchMode.get())) ? View.VISIBLE : View.GONE);
-        v.setAlpha(isInPictureInPictureMode ? 0.f : 0.7f);
+        v.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
         makeSureHelpersAreVisibleAndInScreenBounds();
     }
 
@@ -413,11 +413,13 @@ public class MainActivity extends AppCompatActivity {
         Button right = findViewById(R.id.mouse_button_right_click);
         Button middle = findViewById(R.id.mouse_button_middle_click);
         ImageButton pos = findViewById(R.id.mouse_buttons_position);
+        ImageButton kbd = findViewById(R.id.mouse_buttons_keyboard);
         LinearLayout primaryLayer = findViewById(R.id.mouse_buttons);
         LinearLayout secondaryLayer = findViewById(R.id.mouse_buttons_secondary_layer);
 
         boolean mouseHelperEnabled = prefs.showMouseHelper.get() && "1".equals(prefs.touchMode.get());
         primaryLayer.setVisibility(mouseHelperEnabled ? View.VISIBLE : View.GONE);
+        primaryLayer.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
 
         pos.setOnClickListener((v) -> {
             if (secondaryLayer.getOrientation() == LinearLayout.HORIZONTAL) {
@@ -438,6 +440,8 @@ public class MainActivity extends AppCompatActivity {
                 primaryLayer.setY(MathUtils.clamp(primaryLayer.getY(), frm.getY(), maxY));
             }, 10);
         });
+
+        kbd.setOnClickListener((v) -> toggleKeyboardVisibility(MainActivity.this));
 
         Map.of(left, InputStub.BUTTON_LEFT, middle, InputStub.BUTTON_MIDDLE, right, InputStub.BUTTON_RIGHT)
                 .forEach((v, b) -> v.setOnTouchListener((__, e) -> {
@@ -831,7 +835,7 @@ public class MainActivity extends AppCompatActivity {
         this.isInPictureInPictureMode = isInPictureInPictureMode;
         final ViewPager pager = getTerminalToolbarViewPager();
         pager.setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.opacityEKBar.get())/100);
-        findViewById(R.id.mouse_buttons).setAlpha(isInPictureInPictureMode ? 0.f : 0.7f);
+        findViewById(R.id.mouse_buttons).setAlpha(isInPictureInPictureMode ? 0.f : ((float) prefs.mouseHelperOpacity.get()) / 100);
         findViewById(R.id.mouse_helper_visibility).setAlpha(isInPictureInPictureMode ? 0.f : 1.f);
 
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);

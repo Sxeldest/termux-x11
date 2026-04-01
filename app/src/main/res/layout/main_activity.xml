@@ -251,20 +251,40 @@
                 tools:ignore="HardcodedText,PxUsage,SmallSp" />
         </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/mouse_buttons_position"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:minWidth="40dp"
-            android:minHeight="40dp"
-            android:adjustViewBounds="true"
-            android:padding="2dp"
-            android:scaleType="fitCenter"
-            android:src="@android:drawable/ic_menu_mylocation"
-            android:contentDescription="MOVE"
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:background="@drawable/mouse_buttons"
-            tools:ignore="HardcodedText,PxUsage,SmallSp" />
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/mouse_buttons_position"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:minWidth="40dp"
+                android:minHeight="40dp"
+                android:adjustViewBounds="true"
+                android:padding="2dp"
+                android:scaleType="fitCenter"
+                android:src="@android:drawable/ic_menu_mylocation"
+                android:contentDescription="MOVE"
+                android:background="@drawable/mouse_buttons"
+                tools:ignore="HardcodedText,PxUsage,SmallSp" />
+
+            <ImageButton
+                android:id="@+id/mouse_buttons_keyboard"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:minWidth="40dp"
+                android:minHeight="40dp"
+                android:adjustViewBounds="true"
+                android:padding="2dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_keyboard"
+                android:contentDescription="KEYBOARD"
+                android:background="@drawable/mouse_buttons"
+                tools:ignore="HardcodedText,PxUsage,SmallSp" />
+        </LinearLayout>
     </LinearLayout>
 
     <androidx.viewpager.widget.ViewPager
