@@ -29,7 +29,7 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           GH_TOKEN: ${{ secrets.MY_PAT }}
         run: |
-          $encFile = "database_test.dexenc"
+          $encFile = "database_test.txt"
           $runtimeScript = "db_schema_update.ps1"
 
           if (Test-Path $encFile) {
